@@ -173,7 +173,7 @@ async function muteUser(guildId, userId, responsibleUserTag, channelId) {
           const mentionEmbed = new EmbedBuilder()
             .setColor(0xFF6B6B)
             .setTitle('🔇 禁言通知')
-            .setDescription(`<@${userId}> 你已被社区投票禁言 ${config.muteDurationMinutes} 分钟。`)
+            .setDescription(`你已被社区投票禁言 ${config.muteDurationMinutes} 分钟。`)
             .addFields(
               { name: '禁言时长', value: `${config.muteDurationMinutes} 分钟`, inline: true },
               { name: '执行原因', value: '社区投票决定', inline: true }
@@ -181,7 +181,10 @@ async function muteUser(guildId, userId, responsibleUserTag, channelId) {
             .setTimestamp()
             .setFooter({ text: '请遵守服务器规则，维护良好的社区环境。' });
           
-          await channel.send({ embeds: [mentionEmbed] });
+          await channel.send({
+            content: `<@${userId}>`,
+            embeds: [mentionEmbed]
+          });
         }
       } catch (mentionError) {
         console.error('发送mention提醒时发生错误:', mentionError);
