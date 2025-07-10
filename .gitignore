@@ -7,3 +7,9 @@ yarn.lock
 .vscode/
 .idea/
 config.*
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.webp
