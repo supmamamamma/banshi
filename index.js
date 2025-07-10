@@ -139,7 +139,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
       // 检查是否达到禁言阈值
       if (currentVotes >= voteInfo.requiredVotes) {
         // 执行禁言操作
-        await muteUser(voteInfo.guildId, voteInfo.targetUserId, user.tag);
+        await muteUser(voteInfo.guildId, voteInfo.targetUserId, user.tag, voteInfo.channelId);
         
         // 更新消息，宣告结果
         const finalEmbed = new EmbedBuilder(updatedEmbed.toJSON())
@@ -155,7 +155,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
   }
 });
 
-async function muteUser(guildId, userId, responsibleUserTag) {
+async function muteUser(guildId, userId, responsibleUserTag, channelId) {
   try {
     const guild = await client.guilds.fetch(guildId);
     const member = await guild.members.fetch(userId);
@@ -165,6 +165,27 @@ async function muteUser(guildId, userId, responsibleUserTag) {
       const duration = config.muteDurationMinutes * 60 * 1000;
       await member.timeout(duration, `由 ${responsibleUserTag} 发起的投票决定`);
       console.log(`成功禁言用户 ${member.user.tag}，时长 ${config.muteDurationMinutes} 分钟。`);
+      
+      // 发送mention提醒消息
+      try {
+        const channel = await client.channels.fetch(channelId);
+        if (channel) {
+          const mentionEmbed = new EmbedBuilder()
+            .setColor(0xFF6B6B)
+            .setTitle('🔇 禁言通知')
+            .setDescription(`<@${userId}> 你已被社区投票禁言 ${config.muteDurationMinutes} 分钟。`)
+            .addFields(
+              { name: '禁言时长', value: `${config.muteDurationMinutes} 分钟`, inline: true },
+              { name: '执行原因', value: '社区投票决定', inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: '请遵守服务器规则，维护良好的社区环境。' });
+          
+          await channel.send({ embeds: [mentionEmbed] });
+        }
+      } catch (mentionError) {
+        console.error('发送mention提醒时发生错误:', mentionError);
+      }
     } else {
       console.log('无法在服务器上找到该用户。');
     }
