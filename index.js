@@ -106,6 +106,16 @@ client.on('messageReactionAdd', async (reaction, user) => {
   // 如果是机器人自己添加的反应，则忽略
   if (user.bot) return;
 
+  // 对部分加载的反应进行补全
+  if (reaction.partial) {
+    try {
+      await reaction.fetch();
+    } catch (error) {
+      console.error('获取部分反应数据失败：', error);
+      return;
+    }
+  }
+
   // 检查这个反应是否在我们关心的投票消息上
   if (activeVotes.has(reaction.message.id)) {
     const voteInfo = activeVotes.get(reaction.message.id);
@@ -118,14 +128,24 @@ client.on('messageReactionAdd', async (reaction, user) => {
         return;
       }
 
+      let channel;
+      let originalMessage;
+
+      try {
+        channel = await client.channels.fetch(voteInfo.channelId);
+        originalMessage = await channel.messages.fetch(voteInfo.messageId);
+      } catch (fetchError) {
+        console.error('获取投票消息时发生错误:', fetchError);
+        return;
+      }
+
       // 添加用户到已投票列表
       voteInfo.voters.add(user.id);
       const currentVotes = voteInfo.voters.size;
 
       // 更新投票消息
-      const originalMessage = await client.channels.cache.get(voteInfo.channelId).messages.fetch(voteInfo.messageId);
       const originalEmbed = originalMessage.embeds[0];
-      
+
       const updatedEmbed = new EmbedBuilder(originalEmbed.toJSON())
         .setFields(
             { name: '目标用户', value: `<@${voteInfo.targetUserId}>`, inline: true },
@@ -140,11 +160,11 @@ client.on('messageReactionAdd', async (reaction, user) => {
       if (currentVotes >= voteInfo.requiredVotes) {
         // 执行禁言操作
         await muteUser(voteInfo.guildId, voteInfo.targetUserId, user.tag, voteInfo.channelId);
-        
+
         // 更新消息，宣告结果
         const finalEmbed = new EmbedBuilder(updatedEmbed.toJSON())
             .setColor(0xFF0000)
-            .setTitle('🚫 投票成功！用户已被禁言')
+            .setTitle('🚫 投票成功！用户已被频道禁言')
             .setFooter({ text: '投票已结束。' });
         await originalMessage.edit({ embeds: [finalEmbed] });
 
@@ -161,34 +181,68 @@ async function muteUser(guildId, userId, responsibleUserTag, channelId) {
     const member = await guild.members.fetch(userId);
 
     if (member) {
+      const channel = await client.channels.fetch(channelId);
+
+      if (!channel || !channel.isTextBased()) {
+        console.warn('禁言失败：指定的频道不存在或不是文本频道。');
+        return;
+      }
+
       // 将分钟转换为毫秒
       const duration = config.muteDurationMinutes * 60 * 1000;
-      await member.timeout(duration, `由 ${responsibleUserTag} 发起的投票决定`);
-      console.log(`成功禁言用户 ${member.user.tag}，时长 ${config.muteDurationMinutes} 分钟。`);
-      
+      const overwriteOptions = {
+        SendMessages: false,
+      };
+
+      if (!channel.isThread()) {
+        overwriteOptions.SendMessagesInThreads = false;
+      }
+
+      await channel.permissionOverwrites.edit(
+        member,
+        overwriteOptions,
+        { reason: `由 ${responsibleUserTag} 发起的投票决定` }
+      );
+
+      console.log(`成功在频道 ${channel.name} 禁言用户 ${member.user.tag}，时长 ${config.muteDurationMinutes} 分钟。`);
+
       // 发送mention提醒消息
       try {
-        const channel = await client.channels.fetch(channelId);
-        if (channel) {
-          const mentionEmbed = new EmbedBuilder()
-            .setColor(0xFF6B6B)
-            .setTitle('🔇 禁言通知')
-            .setDescription(`你已被社区投票禁言 ${config.muteDurationMinutes} 分钟。`)
-            .addFields(
-              { name: '禁言时长', value: `${config.muteDurationMinutes} 分钟`, inline: true },
-              { name: '执行原因', value: '社区投票决定', inline: true }
-            )
-            .setTimestamp()
-            .setFooter({ text: '请遵守服务器规则，维护良好的社区环境。' });
-          
-          await channel.send({
-            content: `<@${userId}>`,
-            embeds: [mentionEmbed]
-          });
-        }
+        const mentionEmbed = new EmbedBuilder()
+          .setColor(0xFF6B6B)
+          .setTitle('🔇 禁言通知')
+          .setDescription(`你已被社区投票在此频道禁言 ${config.muteDurationMinutes} 分钟。`)
+          .addFields(
+            { name: '禁言频道', value: `${channel}`, inline: true },
+            { name: '禁言时长', value: `${config.muteDurationMinutes} 分钟`, inline: true },
+            { name: '执行原因', value: '社区投票决定', inline: true }
+          )
+          .setTimestamp()
+          .setFooter({ text: '请遵守服务器规则，维护良好的社区环境。' });
+
+        await channel.send({
+          content: `<@${userId}>`,
+          embeds: [mentionEmbed]
+        });
       } catch (mentionError) {
         console.error('发送mention提醒时发生错误:', mentionError);
       }
+
+      setTimeout(async () => {
+        try {
+          const restorePermissions = { SendMessages: null };
+
+          if (!channel.isThread()) {
+            restorePermissions.SendMessagesInThreads = null;
+          }
+
+          await channel.permissionOverwrites.edit(member, restorePermissions, {
+            reason: '禁言时长已结束，恢复发言权限。'
+          });
+        } catch (restoreError) {
+          console.error('恢复频道禁言权限时发生错误:', restoreError);
+        }
+      }, duration);
     } else {
       console.log('无法在服务器上找到该用户。');
     }
