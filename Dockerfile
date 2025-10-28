@@ -1,12 +1,14 @@
+# ===================================
 # 基础镜像：带 LXDE 桌面 + noVNC + VNC
-FROM dorowu/ubuntu-desktop-lxde-vnc:latest
+# ===================================
+FROM dorowu/ubuntu-desktop-lxde-vnc:focal
 
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
 
-# ==============================
+# ===================================
 # 安装 Python、Firefox ESR、中文环境
-# ==============================
+# ===================================
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         software-properties-common ca-certificates gnupg curl wget locales && \
@@ -26,17 +28,18 @@ RUN apt-get update && \
     # 常用工具 + 中文支持
     apt-get install -y --no-install-recommends \
         git nano fonts-noto-cjk language-pack-zh-hans && \
+    locale-gen zh_CN.UTF-8 && \
     update-locale LANG=zh_CN.UTF-8 && \
     \
     # 清理
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ==============================
+# ===================================
 # 添加桌面图标（Firefox）
-# ==============================
+# ===================================
 RUN mkdir -p /root/Desktop /etc/skel/Desktop && \
     for d in /root/Desktop /etc/skel/Desktop; do \
-      cat > "$d/firefox.desktop" <<'EOF'; \
+      cat > "$d/firefox.desktop" <<'EOF'
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -53,21 +56,21 @@ EOF
       chmod +x "$d/firefox.desktop"; \
     done
 
-# ==============================
+# ===================================
 # 设置中文环境
-# ==============================
+# ===================================
 ENV LANG=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 ENV LC_ALL=zh_CN.UTF-8
 
-# ==============================
+# ===================================
 # 自启动脚本：启动桌面后自动打开 Firefox
-# ==============================
+# ===================================
 RUN mkdir -p /root/.config/lxsession/LXDE/ && \
     echo '@firefox-esr' >> /root/.config/lxsession/LXDE/autostart
 
-# ==============================
+# ===================================
 # 工作目录与端口
-# ==============================
+# ===================================
 WORKDIR /app
 EXPOSE 80 5900
