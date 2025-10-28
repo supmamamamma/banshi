@@ -7,24 +7,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 USER root
 
 # ===================================
-# 安装 Python、Firefox ESR、中文环境
+# 安装 Python、Firefox（APT 版）、中文环境
 # ===================================
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         software-properties-common ca-certificates gnupg curl wget locales; \
     add-apt-repository -y ppa:deadsnakes/ppa; \
-    add-apt-repository -y ppa:mozillateam/ppa; \
     apt-get update; \
     \
-    # Python 3.12 + pip
+    # Python 3.12（deadsnakes），用 ensurepip 给 3.12 装 pip
     apt-get install -y --no-install-recommends \
-        python3.12 python3.12-venv python3.12-dev python3-pip; \
-    ln -sf /usr/bin/python3.12 /usr/bin/python3; \
-    ln -sf /usr/bin/pip3 /usr/bin/pip; \
+        python3.12 python3.12-venv python3.12-dev; \
+    python3.12 -m ensurepip --upgrade; \
+    python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel; \
     \
-    # Firefox ESR（来自 mozillateam PPA）
-    apt-get install -y --no-install-recommends firefox-esr; \
+    # Firefox（Ubuntu 上没有 firefox-esr，用 APT 版 firefox 即可）
+    apt-get install -y --no-install-recommends firefox; \
     \
     # 常用工具 + 中文支持
     apt-get install -y --no-install-recommends \
@@ -46,11 +45,11 @@ RUN set -eux; \
         "[Desktop Entry]" \
         "Version=1.0" \
         "Type=Application" \
-        "Name=Firefox ESR" \
-        "Name[zh_CN]=Firefox 浏览器 ESR" \
+        "Name=Firefox" \
+        "Name[zh_CN]=Firefox 浏览器" \
         "GenericName=Web Browser" \
         "Comment=Browse the Web" \
-        "Exec=sh -c 'command -v firefox-esr >/dev/null && exec firefox-esr %u || exec firefox %u'" \
+        "Exec=firefox %u" \
         "Icon=firefox" \
         "Terminal=false" \
         "Categories=Network;WebBrowser;" \
@@ -71,7 +70,7 @@ ENV LC_ALL=zh_CN.UTF-8
 # ===================================
 RUN set -eux; \
     mkdir -p /root/.config/lxsession/LXDE/; \
-    echo '@firefox-esr' >> /root/.config/lxsession/LXDE/autostart
+    echo '@firefox' >> /root/.config/lxsession/LXDE/autostart
 
 # ===================================
 # 工作目录与端口
